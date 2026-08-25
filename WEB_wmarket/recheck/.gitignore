@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.tsbuildinfo
+
+# Texture animation metadata from jar extraction — never read by the icon route
+public/mc-textures/**/*.mcmeta

@@ -1,0 +1,85 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base { archivesName = project.archives_base_name }
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
+    // NOTE: no `mappings ...` line needed here. Since 26.1, Minecraft ships
+    // unobfuscated, so there's nothing to remap and Loom no longer needs an
+    // explicit mappings dependency (Yarn is discontinued past 1.21.11). Older
+    // tutorials/AI output that include `mappings loom.officialMojangMappings()`
+    // predate this and can safely be dropped — confirmed by comparing against
+    // FabricMC's own official template at the "26.2" tag.
+
+    // Since 26.1, Minecraft/mods are no longer remapped, so dependencies on
+    // Fabric Loader/API use plain `implementation`, not `modImplementation`.
+    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // JSON. NOTE: uses java.net.http.HttpClient (built into the JDK) for the
+    // HTTP side instead of a third-party library like OkHttp — see the
+    // comment atop ApiClient.java for why. Gson has zero transitive runtime
+    // dependencies, so Loom's `include` can bundle it into the mod jar
+    // cleanly on its own (no shadow plugin needed). Without `include`, this
+    // dependency would compile fine but throw NoClassDefFoundError at
+    // runtime in the actual game — `implementation` alone does NOT bundle
+    // anything into the final jar.
+    implementation include('com.google.code.gson:gson:2.11.0')
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    // Gradle 9+ no longer bundles the JUnit Platform Launcher automatically —
+    // must be declared explicitly or `./gradlew test` fails with
+    // "Failed to load JUnit Platform... including the JUnit Platform launcher."
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    // Keep test-run logs inside build/ instead of dropping a runtime
+    // config/price-sync/latest.log into the repository root (see Logger).
+    systemProperty "price-sync.logfile",
+            layout.buildDirectory.file("tmp/price-sync-test.log").get().asFile.absolutePath
+}
+
+// Explicit bytecode release target (belt-and-suspenders alongside
+// sourceCompatibility/targetCompatibility below) — matches FabricMC's own
+// 26.2 template exactly.
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 25
+}
+
+java {
+    // 26.1+ requires Java 25 minimum.
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+processResources {
+    inputs.property "version", project.version
+    filteringCharset "UTF-8"
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+// NOTE: since Minecraft/mods are no longer remapped as of 26.1, the build
+// task just produces a plain `jar`, not `remapJar`. If you're copying build
+// steps from an older (pre-26.1) tutorial, drop any `remapJar { ... }`
+// blocks you see there; that task no longer exists.
+//
+// NOT included here (unlike FabricMC's official template): `loom { splitEnvironmentSourceSets() ... }`.
+// That pattern splits code into src/main (both sides) + src/client (client-only)
+// source sets for mods that have server-side logic too. This mod is 100%
+// client-only ("environment": "client" in fabric.mod.json), so everything
+// staying in src/main/java is simpler and equivalent — no need to split.

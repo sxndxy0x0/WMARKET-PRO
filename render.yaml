@@ -1,0 +1,37 @@
+# Render.com Blueprint — WMarket (web + api)
+# วางไฟล์นี้ที่ "repo root" บน GitHub แล้วกด New → Blueprint บน dashboard
+services:
+  - type: web
+    name: wmarket-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PRICE_SNAPSHOT
+        value: "on"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: API_KEYS
+        sync: false      # 🔑 คีย์ลับของ mod-ingest (ตั้งเองใน Dashboard)
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false      # 🔑 JSON ของ service account ทั้งไฟล์ (บรรทัดเดียว)
+      - key: CORS_ORIGIN
+        sync: false      # 🔑 https://wmarket-web.onrender.com
+
+  - type: web
+    name: wmarket-web
+    runtime: node
+    plan: free
+    rootDir: WEB_wmarket/recheck
+    buildCommand: npm ci && npm run build
+    startCommand: npx next start -p $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://wmarket-api.onrender.com

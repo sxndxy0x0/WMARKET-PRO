@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "price_sync",
+  "version": "${version}",
+  "name": "Price Sync",
+  "description": "Detects server price commands and syncs price GUI data to a backend API.",
+  "authors": [
+    "you"
+  ],
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.example.pricesync.PriceSyncMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "icon": "assets/price_sync/icon.png"
+}

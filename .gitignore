@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+.next/
+out/
+dist/
+build/
+
+# env & secrets
+.env
+.env.local
+.env*.local
+*serviceAccountKey*.json
+serviceAccountKey.json
+firebase-adminsdk-*.json
+
+# runtime data (snapshot cache)
+backend/data/
+
+# logs & misc
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+tsconfig.tsbuildinfo
+
+# editor
+.vscode/
+.idea/

@@ -1,0 +1,15 @@
+node_modules/
+.env
+.DS_Store
+*.log
+firebase-debug.log
+firestore-debug.log
+
+# Firebase service account key — full admin credential, never commit
+# (README claims this is ignored; it actually was not until now).
+serviceAccountKey.json
+serviceAccountKey*.json
+*.pem
+
+# In-memory store snapshot (PRICE_SNAPSHOT=on) — derived cache, not source
+data/
