@@ -12,7 +12,22 @@ import { WatchStar } from './WatchStar';
 import { LazySparkline } from './LazySparkline';
 
 export function TrendingStrip({ leaders, histories, server }: { leaders: GainerItem[]; histories: Record<string, HistoryPoint[]>; server: string }) {
-  if (!leaders.length) return null;
+  if (!leaders.length) {
+    // Honest empty-state: on a quiet server nothing has moved in the window,
+    // so instead of vanishing, explain why and how it fills up.
+    return (
+      <section className="mb-5">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-extrabold text-slate-100"><span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-400/15 text-orange-400"><Flame size={15} /></span>กำลังมาแรง</div>
+          {server && <Link href={serverPath(server, '/alerts')} className="hidden items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-xs font-bold text-slate-400 hover:border-white/20 hover:text-slate-100 sm:inline-flex"><Bell size={13} /> แจ้งเตือนราคา</Link>}
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4">
+          <span className="text-lg">😴</span>
+          <p className="text-[13px] leading-relaxed text-slate-500">ยังไม่มีราคาไหนขยับในช่วงนี้ — รายการจะปรากฏทันทีที่ตลาดเริ่มขยับ (mod sync ถัดไปที่มีการเปลี่ยนแปลง)</p>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="mb-5">
       <div className="mb-2 flex items-center justify-between">
