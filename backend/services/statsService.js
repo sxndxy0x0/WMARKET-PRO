@@ -115,7 +115,11 @@ function getPriceChanges(history, limit = 5) {
     ? withChange.reduce((sum, r) => sum + r.changePct, 0) / withChange.length
     : null;
 
-  const sorted = [...withChange].sort((a, b) => b.changePct - a.changePct);
+  // "มาแรง" must mean actual movement — drop flat prices (±0.005%) so the
+  // strip never fills with 0.0% rows on servers whose history barely moves.
+  const movers = withChange.filter((r) => Math.abs(r.changePct) > 0.005);
+
+  const sorted = [...movers].sort((a, b) => b.changePct - a.changePct);
 
   return { avgChangePct, gainers: sorted.slice(0, limit) };
 }
