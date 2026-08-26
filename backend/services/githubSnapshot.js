@@ -78,35 +78,64 @@ async function detectBranch() {
   return meta.default_branch || 'main';
 }
 
+/** Create the mirror branch from the repo's default head if it doesn't exist. */
+async function ensureBranch() {
+  if (!branch) branch = await detectBranch();
+  const chk = await fetch(`https://api.github.com/repos/${REPO}/git/ref/heads/${encodeURIComponent(branch)}`, { headers: headers() });
+  if (chk.ok) return;
+  const meta = await fetch(`https://api.github.com/repos/${REPO}`, { headers: headers() });
+  const def = (await meta.json()).default_branch || 'master';
+  const base = await fetch(`https://api.github.com/repos/${REPO}/git/ref/heads/${def}`, { headers: headers() });
+  if (!base.ok) throw new Error(`base branch ${def}: ${base.status}`);
+  const sha = (await base.json()).object.sha;
+  const made = await fetch(`https://api.github.com/repos/${REPO}/git/refs`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
+  });
+  if (!made.ok && made.status !== 422) throw new Error(`create branch ${branch}: ${made.status}`);
+  console.log(`[gh-snapshot] created branch '${branch}' from ${def}`);
+}
+
 async function pushOnce() {
   if (pushing) return;
   pushing = true;
   try {
     if (!fs.existsSync(SNAPSHOT_PATH)) return;
     if (!branch) branch = await detectBranch();
-    let sha;
-    const cur = await fetch(`${API}?ref=${encodeURIComponent(branch)}`, { headers: headers() });
-    if (cur.ok) sha = (await cur.json()).sha;
-    else if (cur.status !== 404) throw new Error(`head ${cur.status}`);
-    const content = fs.readFileSync(SNAPSHOT_PATH);
-    const res = await fetch(API, {
-      method: 'PUT',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        message: `chore(snapshot) ${new Date().toISOString()}`,
-        content: content.toString('base64'),
-        sha,
-        branch,
-      }),
-    });
+    let res = await attemptPut();
+    if (res.status === 404 && /Branch/i.test(await res.text())) {
+      await ensureBranch();
+      res = await attemptPut();
+    }
     if (!res.ok) throw new Error(`put ${res.status}: ${(await res.text()).slice(0, 120)}`);
     dirty = false;
-    console.log(`[gh-snapshot] pushed ${(content.length / 1024).toFixed(0)}KB to ${REPO}:${FILE_PATH}`);
+    console.log(`[gh-snapshot] pushed ${(fs.statSync(SNAPSHOT_PATH).size / 1024).toFixed(0)}KB to ${REPO}:${FILE_PATH} @${branch}`);
   } catch (e) {
     console.log(`[gh-snapshot] push failed (will retry next tick): ${e.message}`);
   } finally {
     pushing = false;
   }
+}
+
+function attemptPut() {
+  let sha;
+  return fetch(`${API}?ref=${encodeURIComponent(branch)}`, { headers: headers() })
+    .then(async (cur) => {
+      if (cur.ok) sha = (await cur.json()).sha;
+      else if (cur.status !== 404) throw new Error(`head ${cur.status}`);
+      const content = fs.readFileSync(SNAPSHOT_PATH);
+      return fetch(API, {
+        method: 'PUT',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          message: `chore(snapshot) ${new Date().toISOString()}`,
+          content: content.toString('base64'),
+          sha,
+          branch,
+        }),
+      });
+    });
 }
 
 /** Called by priceService right after a successful local save. */
