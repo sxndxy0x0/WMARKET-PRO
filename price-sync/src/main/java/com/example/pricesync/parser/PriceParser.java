@@ -128,6 +128,20 @@ public class PriceParser {
         entry.stackPrice = perStack != null ? perStack : -1;
         // entry.buy stays -1: the parsed price GUI doesn't show a separate buy price.
 
+        // Diagnostic dump for enchanted-book identity (remove after the
+        // variant-collapse investigation). Shows exactly what feeds the hash.
+        if (item.registryId() != null && item.registryId().contains("enchanted_book")) {
+          StringBuilder dbg = new StringBuilder("[DBG-book] id=").append(entry.id)
+              .append(" name='").append(item.displayName()).append("'");
+          if (item.loreLines() != null) {
+            dbg.append(" lore=[");
+            for (String line : item.loreLines()) dbg.append("'").append(line).append("' ");
+            dbg.append(']');
+          }
+          dbg.append(" vkey='").append(item.variantKey()).append("'");
+          com.example.pricesync.util.Logger.debug(dbg.toString());
+        }
+
         return Optional.of(entry);
     }
 

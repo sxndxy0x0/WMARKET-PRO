@@ -30,3 +30,6 @@ tsconfig.tsbuildinfo
 # editor
 .vscode/
 .idea/
+
+price-sync/.gradle/
+price-sync/build/
