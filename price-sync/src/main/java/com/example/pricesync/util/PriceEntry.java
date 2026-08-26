@@ -23,12 +23,20 @@ public class PriceEntry {
         this.sell = sell;
     }
 
-    /** Used by CacheManager to detect price changes, ignoring name/id-only diffs. */
+    /**
+     * Used by CacheManager to detect anything worth re-sending. Compares
+     * prices AND display name: a renamed row (e.g. enchanted books upgraded
+     * from a generic "Enchanted Book" to "Enchanted Book (Density V)") must
+     * reach the backend even though its price never moved. The id is handled
+     * by the caller's map lookup, so it is not compared here.
+     */
     public boolean pricesEqual(PriceEntry other) {
         if (other == null) return false;
         return Double.compare(this.buy, other.buy) == 0
                 && Double.compare(this.sell, other.sell) == 0
-                && Double.compare(this.stackPrice, other.stackPrice) == 0;
+                && Double.compare(this.stackPrice, other.stackPrice) == 0
+                && Objects.equals(this.name == null ? "" : this.name,
+                        other.name == null ? "" : other.name);
     }
 
     @Override

@@ -112,10 +112,25 @@ class CacheManagerTest {
     @Test
     void migratesLegacyCaseVariantServerKeysOnLoad(@TempDir Path tempDir) throws Exception {
         Path path = tempDir.resolve("cache.json");
-        java.nio.file.Files.writeString(path, "{\"SIAM:25565\":{\"diamond\":{\"id\":\"diamond\",\"name\":\"Diamond\",\"buy\":-1,\"sell\":100,\"stackPrice\":-1}}}");
+        java.nio.file.Files.writeString(path, "{\"SIAM:25565\":{\"diamond\":{\"id\":\"diamond\",\"name\":\"diamond\",\"buy\":-1,\"sell\":100,\"stackPrice\":-1}}}");
         CacheManager cache = new CacheManager(path);
         assertTrue(cache.diff("siam:25565", List.of(entry("diamond", 100))).isEmpty());
         assertEquals(1, cache.size("siam:25565"));
+    }
+
+    @Test
+    void renamedItemIsReportedAsChangedEvenWhenPriceMatches(@TempDir Path tempDir) {
+        CacheManager cache = new CacheManager(tempDir.resolve("cache.json"));
+        cache.update("siam:25565", List.of(entry("minecraft:enchanted_book#variant-abc12345", 31.41)));
+
+        // Same price, richer display name -> must still reach the backend once.
+        PriceEntry relabeled = entry("minecraft:enchanted_book#variant-abc12345", 31.41);
+        relabeled.name = "Enchanted Book (Density V)";
+        assertEquals(1, cache.diff("siam:25565", List.of(relabeled)).size());
+
+        // After the rename is accepted, identical scans stay quiet again.
+        cache.update("siam:25565", List.of(relabeled));
+        assertTrue(cache.diff("siam:25565", List.of(relabeled)).isEmpty());
     }
 
     @Test
