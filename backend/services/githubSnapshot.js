@@ -119,7 +119,11 @@ function start() {
   if (!enabled || timer) return;
   console.log(`[gh-snapshot] enabled -> ${REPO}:${FILE_PATH} every ${INTERVAL_SECONDS}s`);
   timer = setInterval(() => {
-    if (dirty) pushOnce();
+    // Refresh the local file from RAM even without price deltas, so the
+    // GitHub mirror stays warm on quiet markets too. Empty-RAM saves are
+    // rejected by priceService's guard, and pushOnce skips a missing file.
+    try { require('./priceService').scheduleSnapshotSave(); } catch { /* noop */ }
+    setTimeout(() => { pushOnce(); }, 6_000);
   }, INTERVAL_SECONDS * 1000);
   if (typeof timer.unref === 'function') timer.unref();
 }
