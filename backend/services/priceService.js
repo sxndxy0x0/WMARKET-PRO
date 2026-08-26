@@ -558,5 +558,6 @@ module.exports = {
   getItemHistory,
   getItems,
   getRecentHistoryDocs: ensureRecentHistory,
+  scheduleSnapshotSave, // exposed so server.js can force a local save at boot
   priceDocId,
 };

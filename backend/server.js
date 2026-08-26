@@ -168,13 +168,17 @@ async function start() {
       // Retry a few times: transient 403s/token hiccups shouldn't leave
       // the mirror empty until the next data delta.
       if (!restored) {
+        // RAM was hydrated by the boot scan but no local file exists yet
+        // (scheduleSnapshotSave only fires on ingest). Force one now so the
+        // initial push has something to upload.
+        try { require('./services/priceService').scheduleSnapshotSave(); } catch {}
         let tries = 0;
         const t = setInterval(async () => {
           tries += 1;
           await gh.pushOnce();
           if (tries >= 5 || !gh.enabled) clearInterval(t);
         }, 45_000);
-        gh.pushOnce();
+        setTimeout(() => gh.pushOnce(), 5_000); // give the debounced save 3s to land
       }
     }
   } catch (e) {
