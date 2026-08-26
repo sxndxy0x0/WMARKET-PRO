@@ -174,10 +174,11 @@ async function start() {
       setTimeout(async () => {
         try {
           const base = `http://127.0.0.1:${actualPort}`;
-          const servers = (await (await fetch(`${base}/api/servers`)).json()) || [];
+          const body = (await (await fetch(`${base}/api/servers`)).json()) || {};
+          const servers = Array.isArray(body) ? body : (body.servers || []);
           for (const s of servers) {
-            const id = encodeURIComponent(typeof s === 'string' ? s : (s.id || s.server || ''));
-            if (id) await fetch(`${base}/api/prices?server=${id}`).catch(() => {});
+            const name = typeof s === 'string' ? s : (s.name || s.id || s.server || '');
+            if (name) await fetch(`${base}/api/prices?server=${encodeURIComponent(name)}`).catch(() => {});
           }
           require('./services/priceService').scheduleSnapshotSave();
           setTimeout(() => gh.pushOnce(), 6_000);
