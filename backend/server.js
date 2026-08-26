@@ -165,8 +165,16 @@ async function start() {
       gh.start();
       // First-ever run: nothing on GitHub yet -> publish the freshly
       // scanned RAM state immediately instead of waiting for a delta.
+      // Retry a few times: transient 403s/token hiccups shouldn't leave
+      // the mirror empty until the next data delta.
       if (!restored) {
-        setTimeout(() => gh.pushOnce(), 10_000);
+        let tries = 0;
+        const t = setInterval(async () => {
+          tries += 1;
+          await gh.pushOnce();
+          if (tries >= 5 || !gh.enabled) clearInterval(t);
+        }, 45_000);
+        gh.pushOnce();
       }
     }
   } catch (e) {
