@@ -167,7 +167,9 @@ function loadSnapshotSync() {
   snapshotLoaded = true;
   try {
     const data = JSON.parse(require('node:fs').readFileSync(SNAPSHOT_PATH, 'utf8'));
-    if (!data || data.v !== 1) return;
+    // An empty snapshot (written before any scan populated RAM) must never
+    // short-circuit a boot — treat it as missing and do the normal scan.
+    if (!data || data.v !== 1 || Object.keys(data.prices || {}).length === 0) return;
     const cutoff = Math.floor(Date.now() / 1000) - RECENT_HISTORY_WINDOW_SECONDS;
     for (const [srv, entry] of Object.entries(data.prices || {})) {
       if (!entry || !Array.isArray(entry.rows)) continue;
@@ -201,6 +203,7 @@ function scheduleSnapshotSave() {
       const out = { v: 1, savedAt: Math.floor(Date.now() / 1000), prices: {}, history: {} };
       for (const [srv, map] of currentRowsByServer) out.prices[srv] = { rows: [...map.values()] };
       for (const [srv, arr] of historyByServer) out.history[srv] = { rows: arr };
+      if (Object.keys(out.prices).length === 0) return; // never persist/push an empty snapshot
       fs.mkdirSync(require('node:path').dirname(SNAPSHOT_PATH), { recursive: true });
       const tmp = `${SNAPSHOT_PATH}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(out));

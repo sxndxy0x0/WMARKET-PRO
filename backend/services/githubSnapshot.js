@@ -54,7 +54,11 @@ async function pullToLocal() {
       return false;
     }
     const text = await res.text();
-    JSON.parse(text); // validate before trusting it
+    const parsed = JSON.parse(text); // validate shape before trusting it
+    if (!parsed || parsed.v !== 1 || Object.keys(parsed.prices || {}).length === 0) {
+      console.log('[gh-snapshot] remote snapshot empty/invalid — ignoring, will rescan');
+      return false;
+    }
     fs.mkdirSync(path.dirname(SNAPSHOT_PATH), { recursive: true });
     const tmp = `${SNAPSHOT_PATH}.dl`;
     fs.writeFileSync(tmp, text);
