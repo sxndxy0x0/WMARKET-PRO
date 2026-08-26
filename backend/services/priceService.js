@@ -205,6 +205,7 @@ function scheduleSnapshotSave() {
       const tmp = `${SNAPSHOT_PATH}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(out));
       fs.renameSync(tmp, SNAPSHOT_PATH);
+      require('./githubSnapshot').noteSnapshotWritten();
     } catch { /* best-effort persistence */ }
   }, 3000);
   if (typeof snapshotSaveTimer.unref === 'function') snapshotSaveTimer.unref();

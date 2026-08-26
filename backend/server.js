@@ -155,6 +155,18 @@ async function start() {
   });
   const actualPort = server.address().port;
   console.log(`[price-sync-backend] listening on :${actualPort}`);
+
+  // GitHub-backed snapshot: restore local file before first data load, then
+  // mirror writes back periodically. Fully optional (env-gated), never fatal.
+  try {
+    const gh = require('./services/githubSnapshot');
+    if (gh.enabled) {
+      await gh.pullToLocal();
+      gh.start();
+    }
+  } catch (e) {
+    console.log(`[gh-snapshot] init skipped: ${e.message}`);
+  }
 }
 
 /**
