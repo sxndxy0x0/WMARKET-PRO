@@ -224,8 +224,7 @@ test('legacy lookup fires once per new item, then adaptively skipped', async () 
   assert.equal(counters.txGets, afterFirstSync.gets, 'unchanged items never touch Firestore at all');
 });
 
-test('alerts trigger from the RAM cache without re-querying Firestore', async () => {
-  const alerts = require('../services/alertsService');
+test('alerts trigger from the RAM cache without re-querying Firestore', async () => {  const alerts = require('../services/alertsService');
   collections.priceAlerts.set('alert1', {
     userId: 'u1', server: SERVER, itemId: 'b', itemName: 'Banana',
     thresholdType: 'above', thresholdValue: 22, triggeredAt: null,
@@ -247,4 +246,26 @@ test('alerts trigger from the RAM cache without re-querying Firestore', async ()
   // The cache-patched row must not re-fire on later syncs.
   const again = await alerts.checkAndTriggerBatch(SERVER, [{ itemId: 'b', sellPrice: 31 }]);
   assert.equal(again.length, 0, 'already-triggered alert is skipped');
+});
+
+test('history gap throttle keeps current-price writes but skips rapid re-points', async () => {
+  priceService.setHistoryMinGapSecondsForTest(1800);
+  try {
+    // Item "b" last recorded a history point at BASE + 3000 (from earlier tests).
+    // A change landing only 600s later must update the CURRENT doc but skip
+    // the history append: exactly ONE batch write instead of two.
+    const before = { batch: counters.batchSets };
+    await priceService.applyPriceUpdate(payloadAt(3600, { sell: 27 }));
+    assert.equal(counters.batchSets - before.batch, 1, 'current doc written, history point suppressed');
+
+    const b = collections.prices.get(priceService.priceDocId(SERVER, 'b'));
+    assert.equal(b.sellPrice, 27, 'the live price still updates while throttled');
+
+    // Once the gap has elapsed, history resumes normally (2 writes again).
+    const beforeLater = { batch: counters.batchSets };
+    await priceService.applyPriceUpdate(payloadAt(7200, { sell: 28 }));
+    assert.equal(counters.batchSets - beforeLater.batch, 2, 'history appends again after the gap');
+  } finally {
+    priceService.setHistoryMinGapSecondsForTest(0); // restore exact-match semantics
+  }
 });

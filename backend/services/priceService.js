@@ -20,6 +20,25 @@ const crypto = require('crypto');
 const RECENT_HISTORY_WINDOW_SECONDS = 7 * 24 * 60 * 60;
 const MAX_RECENT_HISTORY_DOCS = 5000;
 
+// ---- history write throttle -----------------------------------------------
+// A changed price ALWAYS updates its current-price doc (that is the data users
+// browse), but appending a chart/history point on EVERY observed change can
+// double the daily write bill on servers whose prices jitter between scans.
+// When > 0, a history point is appended only if the item's most recent point
+// is at least this many seconds old (items with no prior point always append).
+// Configure via HISTORY_MIN_GAP_SECONDS (0 = never throttle). Default 900s:
+// with the recommended automatic scan interval of 10 minutes this trims the
+// second-and-third rapid re-scan points while keeping charts honest.
+let HISTORY_MIN_GAP_SECONDS = (() => {
+  const parsed = Number.parseInt(process.env.HISTORY_MIN_GAP_SECONDS ?? '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 900;
+})();
+
+/** Test hook: override the throttle window without re-requiring the module. */
+function setHistoryMinGapSecondsForTest(value) {
+  HISTORY_MIN_GAP_SECONDS = value;
+}
+
 /**
  * Firestore collections used:
  *  - `prices`:       deterministic doc ID (legacy-safe or v2 hash)
@@ -142,12 +161,36 @@ function insertHistoryRows(server, newRows) {
   if (!Array.isArray(newRows) || newRows.length === 0) return;
   const arr = historyByServer.get(server);
   if (!arr) return; // not loaded yet — the next ensureRecentHistory picks them up
+  const lastIndex = lastHistoryAtByServer.get(server);
   for (const row of newRows) {
     let i = 0;
     while (i < arr.length && (arr[i].createdAt ?? 0) > (row.createdAt ?? 0)) i++;
     arr.splice(i, 0, row);
+    if (lastIndex) {
+      const time = row.createdAt ?? 0;
+      const current = lastIndex.get(row.itemId);
+      if (current === undefined || time > current) lastIndex.set(row.itemId, time);
+    }
   }
   if (arr.length > MAX_RECENT_HISTORY_DOCS) arr.length = MAX_RECENT_HISTORY_DOCS;
+}
+
+// server -> Map<itemId, newest createdAt>, feeding the history-gap throttle.
+// Derived from the newest-first RAM array (first occurrence per item wins) and
+// kept warm incrementally by insertHistoryRows afterwards.
+const lastHistoryAtByServer = new Map();
+
+function refreshLastHistoryIndex(server) {
+  const arr = historyByServer.get(server);
+  if (!arr) {
+    lastHistoryAtByServer.delete(server);
+    return;
+  }
+  const index = new Map();
+  for (const row of arr) {
+    if (!index.has(row.itemId)) index.set(row.itemId, row.createdAt ?? 0);
+  }
+  lastHistoryAtByServer.set(server, index);
 }
 
 // ---- optional disk snapshot (PRICE_SNAPSHOT=on) ---------------------------
@@ -449,12 +492,26 @@ async function applyPriceUpdate({ server, timestamp, prices }) {
   }
 
   // History records a PRICE timeline, not a poll log: append only the items
-  // whose observed values actually changed (or are brand new).
+  // whose observed values actually changed (or are brand new) — and, when the
+  // gap throttle is on, only if enough time has passed since the item's last
+  // recorded point. The current-price doc above is never throttled.
   const historyBatch = db.batch();
   let historyWrites = 0;
+  let historySkipped = 0;
   const freshHistoryRows = [];
+  if (HISTORY_MIN_GAP_SECONDS > 0 && !lastHistoryAtByServer.has(server) && historyByServer.has(server)) {
+    refreshLastHistoryIndex(server);
+  }
+  const lastHistoryAt = lastHistoryAtByServer.get(server);
   for (const { idx } of actuallyWritten) {
     const item = prices[idx];
+    if (HISTORY_MIN_GAP_SECONDS > 0 && lastHistoryAt) {
+      const previousAt = lastHistoryAt.get(item.id);
+      if (Number.isFinite(previousAt) && previousAt > 0 && now - previousAt < HISTORY_MIN_GAP_SECONDS) {
+        historySkipped += 1;
+        continue;
+      }
+    }
     const row = {
       server,
       itemId: item.id,
@@ -477,6 +534,9 @@ async function applyPriceUpdate({ server, timestamp, prices }) {
     // Mirror the committed points into the in-memory store so chart/stats
     // reads never need Firestore between restarts.
     insertHistoryRows(server, freshHistoryRows);
+  }
+  if (historySkipped > 0) {
+    console.log(`[prices] history throttle: skipped ${historySkipped} point(s) for ${server} (min gap ${HISTORY_MIN_GAP_SECONDS}s)`);
   }
 
   // Patch the in-memory store with exactly what was committed — this is what
@@ -563,4 +623,5 @@ module.exports = {
   getRecentHistoryDocs: ensureRecentHistory,
   scheduleSnapshotSave, // exposed so server.js can force a local save at boot
   priceDocId,
+  setHistoryMinGapSecondsForTest, // test-only throttle override
 };
