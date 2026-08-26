@@ -409,6 +409,50 @@ class PriceParserTest {
         assertFalse(source.contains("Integer.toHexString(variant.hashCode())"));
     }
 
+    // --- Regression: describeVariant must understand Minecraft's component dump,
+    // where the enchantment id hides behind a SECOND "minecraft:" prefix:
+    //   Reference{ResourceKey[minecraft:enchantment / minecraft:density]=…}=>1
+    // The first pattern version captured only [a-z0-9_]+ after the slash, which
+    // stops at the ":" — so nothing ever matched, books kept the generic name,
+    // and every scan stayed "unchanged" against the cached generic rows. ---
+    @Test
+    void enchantedBookGetsReadableNameFromRealAmoryComponentDump() {
+        String variantKey = "#components\n"
+                + "minecraft:custom_data=Optional[{PublicBukkitValues:{\"amorylibraries:unknow_item\":1b}}]\n"
+                + "minecraft:enchantments=Optional[ItemEnchantments{enchantments={"
+                + "Reference{ResourceKey[minecraft:enchantment / minecraft:density]="
+                + "Enchantment §f󸀆 §rDensity§r}=>1}}]";
+
+        var item = new GuiParser.ParsedItem("Enchanted Book", "minecraft:enchanted_book",
+                List.of("ราคา: 31.41"), variantKey, true);
+
+        var entry = parser.parse(item).orElseThrow();
+        assertEquals("Enchanted Book (Density I)", entry.name);
+    }
+
+    @Test
+    void multipleEnchantmentsAreListedWithRomanNumerals() {
+        String variantKey = "#components\n"
+                + "minecraft:enchantments=Optional[ItemEnchantments{enchantments={"
+                + "Reference{ResourceKey[minecraft:enchantment / minecraft:sharpness]="
+                + "Enchantment §f§rSharpness§r}=>3, "
+                + "Reference{ResourceKey[minecraft:enchantment / minecraft:unbreaking]="
+                + "Enchantment §f§rUnbreaking§r}=>3}}]";
+
+        var item = new GuiParser.ParsedItem("Enchanted Book", "minecraft:enchanted_book",
+                List.of("ราคา: 55.00"), variantKey, true);
+
+        assertEquals("Enchanted Book (Sharpness III, Unbreaking III)",
+                parser.parse(item).orElseThrow().name);
+    }
+
+    @Test
+    void nonBookItemsKeepTheirPlainDisplayName() {
+        var item = new GuiParser.ParsedItem("Diamond Sword", "minecraft:diamond_sword",
+                List.of("ราคาต่อชิ้น: 120"), "#components\nminecraft:damage=42", true);
+
+        assertEquals("Diamond Sword", parser.parse(item).orElseThrow().name);
+    }
 
 }
 

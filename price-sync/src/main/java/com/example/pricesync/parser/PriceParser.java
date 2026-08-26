@@ -132,9 +132,13 @@ public class PriceParser {
     }
 
     /** Matches one enchantment inside an ItemEnchantments component dump:
-     *  "minecraft:density]=… §rDensity§r}=>5" -> (density, 5). */
+     *  "minecraft:density]=… §rDensity§r}=>5" -> (density, 5).
+     *  The id sits behind its own namespace prefix ("minecraft:enchantment /
+     *  minecraft:density"), so the optional "(?:minecraft:)?" before the capture
+     *  is mandatory in practice — without it the group grabs "minecraft" and the
+     *  required "]=" never lines up, silently matching nothing. */
     private static final Pattern ENCHANTMENT_COMPONENT_PATTERN = Pattern.compile(
-            "minecraft:enchantment\\s*/\\s*([a-z0-9_]+)\\]=.*?=>\\s*(-?[0-9]+)");
+            "minecraft:enchantment\\s*/\\s*(?:minecraft:)?([a-z0-9_]+)\\]=.*?=>\\s*(-?[0-9]+)");
 
     private static final String[] ROMAN = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
 
