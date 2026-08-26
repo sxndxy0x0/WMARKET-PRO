@@ -40,7 +40,13 @@ public class PriceSyncMod implements ClientModInitializer {
     public void onInitializeClient() {
         instance = this;
 
-        Logger.info("Initializing Price Sync mod...");
+        // Log the exact running version: "which jar is actually loaded?" was
+        // impossible to answer from logs alone during the 26.1.x rollout.
+        String runningVersion = net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getModContainer(MOD_ID)
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("unknown");
+        Logger.info("Initializing Price Sync mod v" + runningVersion + "...");
 
         configManager = new ConfigManager();
         configManager.load(); // also runs validate() internally, incl. Logger.setDebugEnabled(...)
