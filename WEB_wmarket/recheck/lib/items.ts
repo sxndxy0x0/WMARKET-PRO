@@ -51,14 +51,15 @@ export type DedupeInput = {
 };
 
 /**
- * Collapse duplicate listings into one row per (base id + sanitized name).
+ * Collapse duplicate listings, keeping every genuinely distinct variant.
  *
- * Preference order inside a group:
- *  1. the plain id without any `#fragment` (the plugin's canonical row),
- *  2. otherwise the most recently updated row.
- *
- * `sellHigh`-style numeric maxima can be merged via mergeExtras so callers
- * never lose a higher value recorded on the discarded twin.
+ * Rows are grouped by (base id + sanitized name). Inside a group:
+ *  - At most ONE distinct `#fragment` across all members = the same listing
+ *    seen twice (the plugin's plain row plus its `#variant` twin): collapse
+ *    into one row, preferring the plain id and merging numeric extras.
+ *  - Two or more DISTINCT fragments = different market items sharing a
+ *    registry id (e.g. amory's Enchanted Book per enchantment+level): keep
+ *    them all so nothing disappears.
  */
 export function dedupeBy<T extends DedupeInput & Record<string, unknown>>(
   items: T[],
@@ -74,23 +75,33 @@ export function dedupeBy<T extends DedupeInput & Record<string, unknown>>(
 
   const result: T[] = [];
   for (const group of groups.values()) {
-    if (group.length === 1) {
-      result.push(group[0]);
+    let distinctFragments = 0;
+    for (const item of group) {
+      const hashIndex = item.id.indexOf('#');
+      if (hashIndex >= 0 && item.id.slice(hashIndex + 1).length > 0) distinctFragments++;
+      if (distinctFragments > 1) break;
+    }
+    // A single shared fragment (or none at all) means every member is a
+    // duplicate listing of the SAME item -> pick the canonical row.
+    if (group.length === 1 || distinctFragments <= 1) {
+      const canonical =
+        group.length === 1
+          ? group[0]
+          : group.find((item) => !item.id.includes('#')) ??
+            group.reduce((newest, item) =>
+              (item.updated_at ?? 0) >= (newest.updated_at ?? 0) ? item : newest
+            );
+      let merged = canonical;
+      for (const other of group) {
+        if (other === canonical) continue;
+        // Pass the running `merged` (not the original canonical) so chained
+        // merges like Math.max see values picked up from earlier twins.
+        merged = { ...merged, ...(mergeExtras?.(merged, other) as Partial<T> | undefined) };
+      }
+      result.push(merged);
       continue;
     }
-    const canonical =
-      group.find((item) => !item.id.includes('#')) ??
-      group.reduce((newest, item) =>
-        (item.updated_at ?? 0) >= (newest.updated_at ?? 0) ? item : newest
-      );
-    let merged = canonical;
-    for (const other of group) {
-      if (other === canonical) continue;
-      // Pass the running `merged` (not the original canonical) so chained
-      // merges like Math.max see values picked up from earlier twins.
-      merged = { ...merged, ...(mergeExtras?.(merged, other) as Partial<T> | undefined) };
-    }
-    result.push(merged);
+    result.push(...group);
   }
   return result;
 }

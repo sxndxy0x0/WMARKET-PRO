@@ -122,27 +122,62 @@ public class PriceParser {
 
         PriceEntry entry = new PriceEntry();
         entry.id = buildStableId(item);
-        entry.name = item.displayName();
+        entry.name = describeVariant(item.displayName(), item.registryId(), item.variantKey());
         entry.variantKey = item.variantKey();
         entry.sell = perUnit != null ? perUnit : -1;
         entry.stackPrice = perStack != null ? perStack : -1;
         // entry.buy stays -1: the parsed price GUI doesn't show a separate buy price.
 
-        // Diagnostic dump for enchanted-book identity (remove after the
-        // variant-collapse investigation). Shows exactly what feeds the hash.
-        if (item.registryId() != null && item.registryId().contains("enchanted_book")) {
-          StringBuilder dbg = new StringBuilder("[DBG-book] id=").append(entry.id)
-              .append(" name='").append(item.displayName()).append("'");
-          if (item.loreLines() != null) {
-            dbg.append(" lore=[");
-            for (String line : item.loreLines()) dbg.append("'").append(line).append("' ");
-            dbg.append(']');
-          }
-          dbg.append(" vkey='").append(item.variantKey()).append("'");
-          com.example.pricesync.util.Logger.debug(dbg.toString());
-        }
-
         return Optional.of(entry);
+    }
+
+    /** Matches one enchantment inside an ItemEnchantments component dump:
+     *  "minecraft:density]=… §rDensity§r}=>5" -> (density, 5). */
+    private static final Pattern ENCHANTMENT_COMPONENT_PATTERN = Pattern.compile(
+            "minecraft:enchantment\\s*/\\s*([a-z0-9_]+)\\]=.*?=>\\s*(-?[0-9]+)");
+
+    private static final String[] ROMAN = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+
+    /**
+     * Amory-style shops list every enchanted book under the same registry id
+     * and the same display name, so "Enchanted Book" alone cannot tell one
+     * listing from another on the web. When the component dump inside the
+     * variant key carries enchantment data, append a readable suffix
+     * ("Enchanted Book (Density V)") purely as display sugar; ids stay
+     * hash-based and stable regardless of what this name becomes.
+     */
+    private static String describeVariant(String displayName, String registryId, String variantKey) {
+        if (displayName == null) displayName = "";
+        if (registryId == null || variantKey == null
+                || !registryId.contains("enchanted_book") || !variantKey.contains("enchantments")) {
+            return displayName;
+        }
+        Matcher m = ENCHANTMENT_COMPONENT_PATTERN.matcher(variantKey);
+        List<String> parts = new java.util.ArrayList<>();
+        while (m.find() && parts.size() < 3) {
+            parts.add(prettify(m.group(1)) + " " + romanize(m.group(2)));
+        }
+        if (parts.isEmpty()) return displayName;
+        return displayName + " (" + String.join(", ", parts) + ")";
+    }
+
+    private static String prettify(String id) {
+        StringBuilder sb = new StringBuilder();
+        for (String word : id.split("_")) {
+            if (word.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return sb.toString();
+    }
+
+    private static String romanize(String level) {
+        try {
+            int n = Integer.parseInt(level.trim());
+            return (n >= 1 && n < ROMAN.length) ? ROMAN[n] : level;
+        } catch (NumberFormatException e) {
+            return level;
+        }
     }
 
     private String buildStableId(GuiParser.ParsedItem item) {
