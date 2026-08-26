@@ -1,0 +1,14 @@
+name: Keep backend warm
+# Pings the Render free instance every 10 minutes so it never sleeps
+# (free instances spin down after 15 min idle -> 30-50s wake + 502s).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: curl -fsS --max-time 60 https://backend-yht4.onrender.com/health || true
