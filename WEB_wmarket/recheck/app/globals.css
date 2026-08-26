@@ -9,6 +9,9 @@
 
 html {
   scroll-behavior: smooth;
+  /* Mobile fit guard: nothing may widen the page past the viewport —
+     'clip' (not 'hidden') avoids creating a scroll container. */
+  overflow-x: clip;
 }
 
 body {
@@ -102,6 +105,10 @@ body {
     radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0, 229, 255, 0.08), transparent),
     radial-gradient(ellipse 60% 40% at 100% 0%, rgba(147, 51, 234, 0.06), transparent),
     #080D14;
+  /* Anchor the backdrop to the viewport so it always covers the screen,
+     even if a child momentarily overflows horizontally. */
+  background-attachment: fixed;
+  overflow-x: clip;
   color: #E5E7EB;
 }
 
