@@ -156,6 +156,11 @@ async function start() {
   const actualPort = server.address().port;
   console.log(`[price-sync-backend] listening on :${actualPort}`);
 
+  app.get('/internal/gh-status', (_req, res) => {
+    try { res.json(require('./services/githubSnapshot').status()); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // GitHub-backed snapshot: restore local file before first data load, then
   // mirror writes back periodically. Fully optional (env-gated), never fatal.
   try {

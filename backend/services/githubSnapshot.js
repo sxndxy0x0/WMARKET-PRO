@@ -157,4 +157,17 @@ function start() {
   if (typeof timer.unref === 'function') timer.unref();
 }
 
-module.exports = { enabled, pullToLocal, noteSnapshotWritten, start, pushOnce };
+/** Diagnostic snapshot of the mirror's internal state. */
+function status() {
+  let localSize = null;
+  try { localSize = fs.existsSync(SNAPSHOT_PATH) ? fs.statSync(SNAPSHOT_PATH).size : null; } catch { localSize = -1; }
+  let priceServers = [];
+  try {
+    const ps = require('./priceService');
+    // Reuse public getters indirectly: count servers via a tiny probe.
+    priceServers = ps.getCurrentPrices ? 'see-/api/prices' : 'n/a';
+  } catch { /* noop */ }
+  return { enabled, repo: REPO, path: FILE_PATH, branch: branch || '(unset)', intervalSeconds: INTERVAL_SECONDS, dirty, pushing, localFileBytes: localSize };
+}
+
+module.exports = { enabled, pullToLocal, noteSnapshotWritten, start, pushOnce, status };
