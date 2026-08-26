@@ -168,23 +168,24 @@ async function start() {
     if (gh.enabled) {
       const restored = await gh.pullToLocal();
       gh.start();
-      // First-ever run: nothing on GitHub yet -> publish the freshly
-      // scanned RAM state immediately instead of waiting for a delta.
-      // Retry a few times: transient 403s/token hiccups shouldn't leave
-      // the mirror empty until the next data delta.
-      if (!restored) {
-        // RAM was hydrated by the boot scan but no local file exists yet
-        // (scheduleSnapshotSave only fires on ingest). Force one now so the
-        // initial push has something to upload.
-        try { require('./services/priceService').scheduleSnapshotSave(); } catch {}
-        let tries = 0;
-        const t = setInterval(async () => {
-          tries += 1;
-          await gh.pushOnce();
-          if (tries >= 5 || !gh.enabled) clearInterval(t);
-        }, 45_000);
-        setTimeout(() => gh.pushOnce(), 5_000); // give the debounced save 3s to land
-      }
+      // Warm the RAM stores immediately by walking our own public API for
+      // every registered server. Without this, a short-lived instance can
+      // die before its first 15-min tick and the mirror stays a stub.
+      setTimeout(async () => {
+        try {
+          const base = `http://127.0.0.1:${actualPort}`;
+          const servers = (await (await fetch(`${base}/api/servers`)).json()) || [];
+          for (const s of servers) {
+            const id = encodeURIComponent(typeof s === 'string' ? s : (s.id || s.server || ''));
+            if (id) await fetch(`${base}/api/prices?server=${id}`).catch(() => {});
+          }
+          require('./services/priceService').scheduleSnapshotSave();
+          setTimeout(() => gh.pushOnce(), 6_000);
+          console.log('[gh-snapshot] warmed caches; snapshot queued');
+        } catch (e) {
+          console.log(`[gh-snapshot] warmup skipped: ${e.message}`);
+        }
+      }, 8_000);
     }
   } catch (e) {
     console.log(`[gh-snapshot] init skipped: ${e.message}`);
