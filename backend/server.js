@@ -161,8 +161,13 @@ async function start() {
   try {
     const gh = require('./services/githubSnapshot');
     if (gh.enabled) {
-      await gh.pullToLocal();
+      const restored = await gh.pullToLocal();
       gh.start();
+      // First-ever run: nothing on GitHub yet -> publish the freshly
+      // scanned RAM state immediately instead of waiting for a delta.
+      if (!restored) {
+        setTimeout(() => gh.pushOnce(), 10_000);
+      }
     }
   } catch (e) {
     console.log(`[gh-snapshot] init skipped: ${e.message}`);

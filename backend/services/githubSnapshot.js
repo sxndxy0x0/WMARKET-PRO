@@ -120,4 +120,4 @@ function start() {
   if (typeof timer.unref === 'function') timer.unref();
 }
 
-module.exports = { enabled, pullToLocal, noteSnapshotWritten, start };
+module.exports = { enabled, pullToLocal, noteSnapshotWritten, start, pushOnce };
